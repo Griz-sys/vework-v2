@@ -10,32 +10,34 @@ from app.routers import auth, epics, subtasks, documents, team, ai, analytics, e
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Add new enum values outside a transaction (Postgres restriction)
-    async with engine.connect() as conn:
-        ac = await conn.execution_options(isolation_level="AUTOCOMMIT")
-        await ac.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'"))
-        await ac.execute(text(
-            "DO $$ BEGIN "
-            "  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'epicscope') THEN "
-            "    CREATE TYPE epicscope AS ENUM ('tech', 'civil', 'marketing', 'design'); "
-            "  END IF; "
-            "END $$;"
-        ))
-    async with engine.begin() as conn:
-        await conn.execute(text("ALTER TABLE epics ADD COLUMN IF NOT EXISTS scope epicscope;"))
-        await conn.run_sync(Base.metadata.create_all)
-        # Migrate assigned_to_id → epic_assignees if the old column still exists
-        col_exists = await conn.scalar(text(
-            "SELECT COUNT(*) FROM information_schema.columns "
-            "WHERE table_name='epics' AND column_name='assigned_to_id'"
-        ))
-        if col_exists:
-            await conn.execute(text(
-                "INSERT INTO epic_assignees (epic_id, user_id) "
-                "SELECT id, assigned_to_id FROM epics WHERE assigned_to_id IS NOT NULL "
-                "ON CONFLICT DO NOTHING"
+    try:
+        # Add new enum values outside a transaction (Postgres restriction)
+        async with engine.connect() as conn:
+            ac = await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await ac.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'"))
+            await ac.execute(text(
+                "DO $$ BEGIN "
+                "  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'epicscope') THEN "
+                "    CREATE TYPE epicscope AS ENUM ('tech', 'civil', 'marketing', 'design'); "
+                "  END IF; "
+                "END $$;"
             ))
-            await conn.execute(text("ALTER TABLE epics DROP COLUMN assigned_to_id"))
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE epics ADD COLUMN IF NOT EXISTS scope epicscope;"))
+            await conn.run_sync(Base.metadata.create_all)
+            col_exists = await conn.scalar(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name='epics' AND column_name='assigned_to_id'"
+            ))
+            if col_exists:
+                await conn.execute(text(
+                    "INSERT INTO epic_assignees (epic_id, user_id) "
+                    "SELECT id, assigned_to_id FROM epics WHERE assigned_to_id IS NOT NULL "
+                    "ON CONFLICT DO NOTHING"
+                ))
+                await conn.execute(text("ALTER TABLE epics DROP COLUMN assigned_to_id"))
+    except Exception as e:
+        print(f"[startup] DB migration warning (non-fatal): {e}")
     os.makedirs(settings.storage_path, exist_ok=True)
     yield
     await engine.dispose()
