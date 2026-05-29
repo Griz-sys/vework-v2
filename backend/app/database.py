@@ -7,7 +7,10 @@ _db_url = settings.database_url \
     .replace("postgres://", "postgresql+asyncpg://", 1) \
     .replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(_db_url, pool_pre_ping=True)
+# Railway's public proxy requires SSL
+_connect_args = {"ssl": "require"} if "railway" in _db_url else {}
+
+engine = create_async_engine(_db_url, pool_pre_ping=True, connect_args=_connect_args)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
