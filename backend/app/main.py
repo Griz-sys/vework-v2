@@ -43,11 +43,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VeWork API", version="2.0.0", lifespan=lifespan)
 
-_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5175,http://127.0.0.1:5175").split(",") if o.strip()]
+_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5175,http://127.0.0.1:5175")
+_cors_origins = [o.strip().rstrip("/") for o in _cors_raw.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
