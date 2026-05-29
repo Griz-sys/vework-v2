@@ -57,7 +57,7 @@ export function TaskDetail() {
               <StatusBadge status={epic.status} />
             </div>
             <p className="text-sm text-gray-500">
-              Assigned to <strong>{epic.assignee?.name ?? '—'}</strong>
+              Assigned to <strong>{epic.assignees.length > 0 ? epic.assignees.map(a => a.name).join(', ') : '—'}</strong>
               {epic.due_date && <> · Due {new Date(epic.due_date).toLocaleDateString()}</>}
             </p>
           </div>
